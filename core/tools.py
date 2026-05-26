@@ -19,12 +19,21 @@ def _chunk(text: str) -> List[str]:
 
 
 @function_tool
-def upload_document(file_path: str) -> str:
-    """Index a .txt or .pdf file into the vector store."""
+def upload_document(file_path: str, original_name: str = "") -> str:
+    """Index a .txt or .pdf file into the vector store.
+    
+    Args:
+        file_path: The full path to the file on disk.
+        original_name: The original filename to use as the source label (optional).
+    """
     try:
         path = Path(file_path)
         if not path.exists():
             return json.dumps({"error": f"File not found: {file_path}"})
+        
+        # Use original_name if provided, else use actual filename
+        source_label = original_name.strip() if original_name.strip() else path.name
+        
         if path.suffix.lower() == ".txt":
             text = path.read_text(encoding="utf-8", errors="ignore")
         elif path.suffix.lower() == ".pdf":
@@ -34,12 +43,14 @@ def upload_document(file_path: str) -> str:
                 text = "\n".join(p.extract_text() or "" for p in reader.pages)
         else:
             return json.dumps({"error": "Only .txt and .pdf supported"})
+        
         if not text.strip():
-            return json.dumps({"error": "Document is empty"})
+            return json.dumps({"error": "Document is empty or unreadable"})
+        
         chunks = _chunk(text)
         for i, chunk in enumerate(chunks):
-            _store.add(chunk, path.name, i)
-        return json.dumps({"status": "indexed", "file": path.name, "chunks": len(chunks)})
+            _store.add(chunk, source_label, i)
+        return json.dumps({"status": "indexed", "file": source_label, "chunks": len(chunks)})
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -62,8 +73,13 @@ def search_documents(query: str, top_k: int = 4) -> str:
     try:
         results = _store.search(query, top_k=top_k)
         if not results:
-            return json.dumps({"message": "No results. Index documents first.", "results": []})
-        return json.dumps({"results": [{"source": r["source"], "chunk_id": r["chunk_id"], "text": r["text"][:500]} for r in results]})
+            return json.dumps({"message": "No results found. Please upload a document first.", "results": []})
+        return json.dumps({
+            "results": [
+                {"source": r["source"], "chunk_id": r["chunk_id"], "text": r["text"][:600]}
+                for r in results
+            ]
+        })
     except Exception as e:
         return json.dumps({"error": str(e)})
 

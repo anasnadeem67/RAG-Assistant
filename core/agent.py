@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from agents import Agent, ModelSettings
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
-from core.tools import upload_document, add_text_directly, search_documents, list_indexed_documents, clear_vector_store
 
 load_dotenv()
 
@@ -11,19 +10,23 @@ def build_agent() -> Agent:
     client = AsyncOpenAI(
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url=os.getenv("BASE_URL"),
+        default_headers={
+            "HTTP-Referer": "https://rag-assistant.local",
+            "X-Title": "RAG Assistant",
+        }
     )
     model = OpenAIChatCompletionsModel(
-        model=os.getenv("MODEL"),
+        model=os.getenv("MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
         openai_client=client,
     )
     return Agent(
         name="RAGAssistant",
-        instructions="""You are a RAG assistant.
-1. User uploads a document → call upload_document or add_text_directly.
-2. User asks a question → ALWAYS call search_documents first, then answer.
-3. Cite source: "Based on [filename]..."
-4. Keep answers concise.""",
-        tools=[upload_document, add_text_directly, search_documents, list_indexed_documents, clear_vector_store],
+        instructions="""You are a helpful RAG assistant.
+The user's question and relevant document context will be provided to you together.
+Answer the question based on the provided context.
+Always cite the source document name when answering from documents.
+Be concise and accurate.""",
+        tools=[],
         model=model,
         model_settings=ModelSettings(max_tokens=1024),
     )
